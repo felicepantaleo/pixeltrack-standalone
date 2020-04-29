@@ -1,30 +1,30 @@
-#ifndef HeterogeneousCore_CUDAUtilities_cudastdAlgorithm_h
-#define HeterogeneousCore_CUDAUtilities_cudastdAlgorithm_h
+#ifndef HeterogeneousCore_AlpakaUtilities_alpakastdAlgorithm_h
+#define HeterogeneousCore_AlpakaUtilities_alpakastdAlgorithm_h
 
 #include <utility>
 
-#include <cuda_runtime.h>
+#include <alpaka/alpaka.hpp>
 
-// reimplementation of std algorithms able to compile with CUDA and run on GPUs,
-// mostly by declaringthem constexpr
+// reimplementation of std algorithms able to compile with Alpaka,
+// mostly by declaring them constexpr
 
-namespace cuda_std {
+namespace alpaka_std {
 
   template <typename T = void>
   struct less {
-    __host__ __device__ constexpr bool operator()(const T &lhs, const T &rhs) const { return lhs < rhs; }
+    ALPAKA_FN_HOST_ACC constexpr bool operator()(const T &lhs, const T &rhs) const { return lhs < rhs; }
   };
 
   template <>
   struct less<void> {
     template <typename T, typename U>
-    __host__ __device__ constexpr bool operator()(const T &lhs, const U &rhs) const {
+    ALPAKA_FN_HOST_ACC constexpr bool operator()(const T &lhs, const U &rhs) const {
       return lhs < rhs;
     }
   };
 
   template <typename RandomIt, typename T, typename Compare = less<T>>
-  __host__ __device__ constexpr RandomIt lower_bound(RandomIt first, RandomIt last, const T &value, Compare comp = {}) {
+  ALPAKA_FN_HOST_ACC constexpr RandomIt lower_bound(RandomIt first, RandomIt last, const T &value, Compare comp = {}) {
     auto count = last - first;
 
     while (count > 0) {
@@ -42,7 +42,7 @@ namespace cuda_std {
   }
 
   template <typename RandomIt, typename T, typename Compare = less<T>>
-  __host__ __device__ constexpr RandomIt upper_bound(RandomIt first, RandomIt last, const T &value, Compare comp = {}) {
+  ALPAKA_FN_HOST_ACC constexpr RandomIt upper_bound(RandomIt first, RandomIt last, const T &value, Compare comp = {}) {
     auto count = last - first;
 
     while (count > 0) {
@@ -59,12 +59,12 @@ namespace cuda_std {
     return first;
   }
 
-  template <typename RandomIt, typename T, typename Compare = cuda_std::less<T>>
-  __host__ __device__ constexpr RandomIt binary_find(RandomIt first, RandomIt last, const T &value, Compare comp = {}) {
-    first = cuda_std::lower_bound(first, last, value, comp);
+  template <typename RandomIt, typename T, typename Compare = alpaka_std::less<T>>
+  ALPAKA_FN_HOST_ACC constexpr RandomIt binary_find(RandomIt first, RandomIt last, const T &value, Compare comp = {}) {
+    first = alpaka_std::lower_bound(first, last, value, comp);
     return first != last && !comp(value, *first) ? first : last;
   }
 
-}  // namespace cuda_std
+}  // namespace alpaka_std
 
-#endif  // HeterogeneousCore_CUDAUtilities_cudastdAlgorithm_h
+#endif  // HeterogeneousCore_AlpakaUtilities_alpakastdAlgorithm_h
