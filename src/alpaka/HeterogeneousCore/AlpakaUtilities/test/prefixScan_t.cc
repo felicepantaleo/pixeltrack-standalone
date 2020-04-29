@@ -188,13 +188,12 @@ int main() {
           alpaka::kernel::createTaskKernel<Acc>({Vec::all(nblocks),Vec::all(nthreads),Vec::all(1)}, init(), input_d, 1, num_items);
     alpaka::wait::wait(queue);
     // the block counter
-    int32_t *d_pc;
     // cudaCheck(cudaMalloc(&d_pc, sizeof(int32_t)));
     // cudaCheck(cudaMemset(d_pc, 0, 4));
-    alpaka::mem::view::set(queue, pc_dBuf, 0,4);
+    // the block counter
     auto pc_dBuf = alpaka::mem::buf::alloc<uint32_t, Idx>(device, sizeof(uint32_t));
     uint32_t* pc_d = alpaka::mem::view::getPtrNative(pc_dBuf);
-
+    alpaka::mem::view::set(queue, pc_dBuf, 0,4);
 
     nthreads = 512+256;
     nblocks = (num_items + nthreads - 1) / nthreads;
