@@ -1,5 +1,5 @@
-#ifndef HeterogeneousCore_CUDAUtilities_interface_HistoContainer_h
-#define HeterogeneousCore_CUDAUtilities_interface_HistoContainer_h
+#ifndef HeterogeneousCore_AlpakaUtilities_interface_HistoContainer_h
+#define HeterogeneousCore_AlpakaUtilities_interface_HistoContainer_h
 
 #include <algorithm>
 #ifndef __CUDA_ARCH__
@@ -334,4 +334,4 @@ namespace cms {
   }  // namespace cuda
 }  // namespace cms
 
-#endif  // HeterogeneousCore_CUDAUtilities_interface_HistoContainer_h
+#endif  // HeterogeneousCore_AlpakaUtilities_interface_HistoContainer_h
