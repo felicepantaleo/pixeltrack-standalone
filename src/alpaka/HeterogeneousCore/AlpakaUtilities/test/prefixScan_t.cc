@@ -17,10 +17,11 @@ struct format_traits<float> {
 public:
   static const constexpr char *failed_msg = "failed %d %d %d: %f %f\n";
 };
-template <typename T>
+
+template<typename T>
 struct testPrefixScan {
 template <typename T_Acc>
-ALPAKA_FN_ACC void operator()(const T_Acc& acc, uint32_t size) const {
+ALPAKA_FN_ACC void operator()(const T_Acc& acc, unsigned int size) const {
   auto&&  ws = alpaka::block::shared::st::allocVar<T[32],  __COUNTER__>(acc);
   auto&&  c = alpaka::block::shared::st::allocVar<T[1024],  __COUNTER__>(acc);
   auto&&  co = alpaka::block::shared::st::allocVar<T[1024],  __COUNTER__>(acc);
@@ -33,14 +34,12 @@ ALPAKA_FN_ACC void operator()(const T_Acc& acc, uint32_t size) const {
     c[i] = 1;
   alpaka::block::sync::syncBlockThreads(acc);
 
-  blockPrefixScan<T>(c, co, size, ws);
-  blockPrefixScan<T>(c, size, ws);
+  blockPrefixScan(acc, c, co, size, ws);
+  blockPrefixScan(acc, c, size, ws);
 
   assert(1 == c[0]);
   assert(1 == co[0]);
   for (auto i = first + 1; i < size; i += blockDimension) {
-    if (c[i] != c[i - 1] + 1)
-      printf(format_traits<T>::failed_msg, size, i, blockDimension, c[i], c[i - 1]);
     assert(c[i] == c[i - 1] + 1);
     assert(c[i] == i + 1);
     assert(c[i] = co[i]);
@@ -62,11 +61,10 @@ ALPAKA_FN_ACC void operator()(const T_Acc& acc, uint32_t size) const {
   c[i] = 1;
   alpaka::block::sync::syncBlockThreads(acc);
   auto laneId = blockThreadIdx & 0x1f;
-  #ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
 
   warpPrefixScan(laneId, c, co, i, 0xffffffff);
   warpPrefixScan(laneId, c, i, 0xffffffff);
-  #endif
+
 
   alpaka::block::sync::syncBlockThreads(acc);
 
@@ -129,9 +127,10 @@ int main() {
   const WorkDiv workDiv(blocksPerGrid, threadsPerBlock, elementsPerThread);
   std::cout << "blocks per grid: " << blocksPerGrid << ", threads per block: " << threadsPerBlock << ", elements per thread: " << elementsPerThread << std::endl;
 
+  
+  
+  #ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
   std::cout << "warp level" << std::endl;
-  // std::cout << "warp 32" << std::endl;
-
   alpaka::queue::enqueue(
           queue,
           alpaka::kernel::createTaskKernel<Acc>(workDiv, testWarpPrefixScan<int>(), 32));
@@ -146,7 +145,7 @@ int main() {
           queue,
           alpaka::kernel::createTaskKernel<Acc>(workDiv, testWarpPrefixScan<int>(), 5));
   alpaka::wait::wait(queue);
-  
+#endif  
   std::cout << "block level" << std::endl;
   for (int bs = 32; bs <= 1024; bs += 32) {
     // std::cout << "bs " << bs << std::endl;

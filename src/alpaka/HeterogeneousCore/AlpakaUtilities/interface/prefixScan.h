@@ -86,9 +86,9 @@ namespace cms {
 
     template <typename T_Acc, typename T>
     ALPAKA_FN_HOST_ACC ALPAKA_FN_INLINE void blockPrefixScan(const T_Acc& acc, 
-                                                            T* c,
+                                                            T* __restrict__ c,
                                                             uint32_t size,
-                                                            T* ws
+                                                            T* __restrict__ ws
 #ifndef ALPAKA_ACC_GPU_CUDA_ENABLED
                                                             = nullptr
 #endif
