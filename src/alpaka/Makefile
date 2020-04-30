@@ -63,8 +63,8 @@ endif
 # alpaka flags
 ifdef ALPAKA_BASE
 ALPAKA_CXX_FLAGS  := $(BOOST_CXX_FLAGS) -I$(ALPAKA_BASE)/include
-ALPAKA_NVCC_FLAGS := $(BOOST_CXX_FLAGS) -I$(ALPAKA_BASE)/include -Xcompiler -pthread
-ALPAKA_LD_FLAGS   := -pthread
+ALPAKA_NVCC_FLAGS := $(BOOST_CXX_FLAGS) -I$(ALPAKA_BASE)/include -Xcompiler
+ALPAKA_LD_FLAGS   := 
 ALPAKA_DEBUG      := -DALPAKA_DEBUG=1
 endif
 
@@ -116,7 +116,7 @@ alpaka-debug: debug-alpaka-serial debug-alpaka-tbb debug-alpaka-omp2 debug-alpak
 # 	$(CXX) $(CXX_FLAGS) -DDIGI_ALPAKA -DALPAKA_ACC_CPU_B_SEQ_T_SEQ_ENABLED $(ALPAKA_CXX_FLAGS) -o $@ -c $<
 
 $(BUILD)/main_alpaka.serial.o: HeterogeneousCore/AlpakaUtilities/test/prefixScan_t.cc HeterogeneousCore/AlpakaUtilities/interface/prefixScan.h | $(BUILD)
-	$(CXX) $(CXX_FLAGS) -DDIGI_ALPAKA -DALPAKA_ACC_CPU_B_SEQ_T_SEQ_ENABLED -DALPAKA_ACC_CPU_B_SEQ_T_SEQ_SYNC_BACKEND $(ALPAKA_CXX_FLAGS) -o $@ -c $<
+	$(CXX) $(CXX_FLAGS) -DALPAKA_ACC_CPU_B_SEQ_T_SEQ_ENABLED -DALPAKA_ACC_CPU_B_SEQ_T_SEQ_SYNC_BACKEND $(ALPAKA_CXX_FLAGS) -o $@ -c $<
 
 test-alpaka-serial: $(BUILD)/main_alpaka.serial.o #$(BUILD)/analyzer_alpaka.serial.o $(BUILD)/rawtodigi_alpaka.serial.o
 	$(CXX) $(CXX_FLAGS) -o $@ $+ $(ALPAKA_LD_FLAGS)
