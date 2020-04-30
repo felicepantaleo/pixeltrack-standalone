@@ -3,7 +3,7 @@
 #include "HeterogeneousCore/AlpakaCore/alpakaConfig.h"
 #include "HeterogeneousCore/AlpakaUtilities/interface/prefixScan.h"
 
-using namespace cms::alpaka;
+using namespace cms::Alpaka;
 
 template <typename T>
 struct format_traits {
@@ -20,9 +20,9 @@ public:
 struct testPrefixScan {
 template <typename T, typename T_Acc>
 ALPAKA_FN_ACC void operator()(const T_Acc& acc, uint32_t size) const {
-  auto&& T ws = alpaka::block::shared::st::allocVar<T, 32>(acc);
-  auto&& T c = alpaka::block::shared::st::allocVar<T, 1024>(acc);
-  auto&& T co = alpaka::block::shared::st::allocVar<T, 1024>(acc);
+  auto&&  ws = alpaka::block::shared::st::allocVar<T, 32>(acc);
+  auto&&  c = alpaka::block::shared::st::allocVar<T, 1024>(acc);
+  auto&&  co = alpaka::block::shared::st::allocVar<T, 1024>(acc);
 
   uint32_t const blockDimension(alpaka::workdiv::getWorkDiv<alpaka::Block, alpaka::Threads>(acc)[0u]);
   uint32_t const blockThreadIdx(alpaka::idx::getIdx<alpaka::Block, alpaka::Threads>(acc)[0u]);
@@ -51,8 +51,8 @@ struct testWarpPrefixScan {
 template <typename T, typename T_Acc>
 ALPAKA_FN_ACC void operator()(const T_Acc& acc, uint32_t size) const {
   assert(size <= 32);
-  auto&& T c = alpaka::block::shared::st::allocVar<T, 1024>(acc);
-  auto&& T co = alpaka::block::shared::st::allocVar<T, 1024>(acc);
+  auto&&  c = alpaka::block::shared::st::allocVar<T, 1024>(acc);
+  auto&&  co = alpaka::block::shared::st::allocVar<T, 1024>(acc);
 
   uint32_t const blockDimension(alpaka::workdiv::getWorkDiv<alpaka::Block, alpaka::Threads>(acc)[0u]);
   uint32_t const blockThreadIdx(alpaka::idx::getIdx<alpaka::Block, alpaka::Threads>(acc)[0u]);
@@ -68,7 +68,7 @@ ALPAKA_FN_ACC void operator()(const T_Acc& acc, uint32_t size) const {
   assert(1 == co[0]);
   if (i != 0) {
     if (c[i] != c[i - 1] + 1)
-      printf(format_traits<T>::failed_msg, size, i, blockDim.x, c[i], c[i - 1]);
+      printf(format_traits<T>::failed_msg, size, i, blockDimension, c[i], c[i - 1]);
     assert(c[i] == c[i - 1] + 1);
     assert(c[i] == i + 1);
     assert(c[i] = co[i]);
@@ -92,8 +92,7 @@ ALPAKA_FN_ACC void operator()(const T_Acc& acc, uint32_t *v, uint32_t val, uint3
 
 struct verify {
 template <typename T_Acc>
-ALPAKA_FN_ACC void operator()(const T_Acc& acc,
-__global__ void verify(uint32_t const *v, uint32_t n) const {
+ALPAKA_FN_ACC void operator()(const T_Acc& acc, uint32_t const *v, uint32_t n) const {
   uint32_t const blockDimension(alpaka::workdiv::getWorkDiv<alpaka::Block, alpaka::Threads>(acc)[0u]);
   uint32_t const gridBlockIdx(alpaka::idx::getIdx<alpaka::Grid, alpaka::Blocks>(acc)[0u]);
   uint32_t const blockThreadIdx(alpaka::idx::getIdx<alpaka::Block, alpaka::Threads>(acc)[0u]);
@@ -195,22 +194,22 @@ int main() {
     uint32_t* pc_d = alpaka::mem::view::getPtrNative(pc_dBuf);
     alpaka::mem::view::set(queue, pc_dBuf, 0,4);
 
-    nthreads = 512+256;
-    nblocks = (num_items + nthreads - 1) / nthreads;
-    std::cout << "launch multiBlockPrefixScan " << num_items <<' '<< nblocks << std::endl;
-    // multiBlockPrefixScan<<<nblocks, nthreads, 4*nblocks>>>(input_d, output1_d, num_items, d_pc);
-    alpaka::queue::enqueue(
-          queue,
-          alpaka::kernel::createTaskKernel<Acc>({Vec::all(nblocks),Vec::all(nthreads),Vec::all(1)}, multiBlockPrefixScan(), input_d, output1_d, num_items, pc_d);
-    alpaka::wait::wait(queue);
+    // nthreads = 512+256;
+    // nblocks = (num_items + nthreads - 1) / nthreads;
+    // std::cout << "launch multiBlockPrefixScan " << num_items <<' '<< nblocks << std::endl;
+    // // multiBlockPrefixScan<<<nblocks, nthreads, 4*nblocks>>>(input_d, output1_d, num_items, d_pc);
+    // alpaka::queue::enqueue(
+    //       queue,
+    //       alpaka::kernel::createTaskKernel<Acc>({Vec::all(nblocks),Vec::all(nthreads),Vec::all(1)}, multiBlockPrefixScan(), input_d, output1_d, num_items, pc_d);
+    // alpaka::wait::wait(queue);
 
 
-    cudaCheck(cudaGetLastError());
-    // verify<<<nblocks, nthreads, 0>>>(output1_d, num_items);
-        alpaka::queue::enqueue(
-          queue,
-          alpaka::kernel::createTaskKernel<Acc>({Vec::all(nblocks),Vec::all(nthreads),Vec::all(1)}, verify(), output1_d, num_items);
-    alpaka::wait::wait(queue);
+    // cudaCheck(cudaGetLastError());
+    // // verify<<<nblocks, nthreads, 0>>>(output1_d, num_items);
+    //     alpaka::queue::enqueue(
+    //       queue,
+    //       alpaka::kernel::createTaskKernel<Acc>({Vec::all(nblocks),Vec::all(nthreads),Vec::all(1)}, verify(), output1_d, num_items);
+    // alpaka::wait::wait(queue);
 
 
   }  // ksize

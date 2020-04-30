@@ -2,11 +2,12 @@
 #define HeterogeneousCore_AlpakaUtilities_interface_prefixScan_h
 
 #include <cstdint>
+#include <HeterogeneousCore/AlpakaCore/alpakaConfig.h>
 
 #ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
 
 template <typename T>
-ALPAKA_FN_ACC void __forceinline__ warpPrefixScan(uint32_t laneId, T const* __restrict__ ci, T* __restrict__ co, uint32_t i, uint32_t mask) {
+ALPAKA_FN_INLINE void warpPrefixScan(uint32_t laneId, T const* __restrict__ ci, T* __restrict__ co, uint32_t i, uint32_t mask) {
   // ci and co may be the same
   auto x = ci[i];
 #pragma unroll
@@ -19,7 +20,7 @@ ALPAKA_FN_ACC void __forceinline__ warpPrefixScan(uint32_t laneId, T const* __re
 }
 
 template <typename T>
-ALPAKA_FN_ACC void __forceinline__ warpPrefixScan(uint32_t laneId, T* c, uint32_t i, uint32_t mask) {
+ALPAKA_FN_INLINE void warpPrefixScan(uint32_t laneId, T* c, uint32_t i, uint32_t mask) {
   auto x = c[i];
 #pragma unroll
   for (int offset = 1; offset < 32; offset <<= 1) {
@@ -33,12 +34,11 @@ ALPAKA_FN_ACC void __forceinline__ warpPrefixScan(uint32_t laneId, T* c, uint32_
 #endif
 
 namespace cms {
-  namespace alpaka {
-
+  namespace Alpaka {
     // limited to 32*32 elements....
     struct blockPrefixScan {
     template <typename T, typename T_Acc>
-    ALPAKA_FN_ACC __forceinline__ void operator()(const T_Acc& acc, T const* __restrict__ ci,
+    ALPAKA_FN_INLINE  void operator()(const T_Acc& acc, T const* __restrict__ ci,
                                                              T* __restrict__ co,
                                                              uint32_t size,
                                                              T* ws
@@ -84,12 +84,9 @@ namespace cms {
         co[i] = ci[i] + co[i - 1];
 #endif
     }
-    };
-    // same as above, may remove
-    // limited to 32*32 elements....
-    struct blockPrefixScan {
+
     template <typename T, typename T_Acc>
-    ALPAKA_FN_ACC __forceinline__ void operator()(const T_Acc& acc, 
+    ALPAKA_FN_INLINE void operator()(const T_Acc& acc, 
                                                             T* c,
                                                             uint32_t size,
                                                             T* ws
@@ -133,17 +130,22 @@ namespace cms {
 #endif
     }
     };
+    // same as above, may remove
+    // limited to 32*32 elements....
+    // struct blockPrefixScan {
+    // ....... copy from ALPAKA_FN_INLINE...
+    // };
 
     // limited to 1024*1024 elements....
     struct multiBlockPrefixScan {
     template <typename T, typename T_Acc>
-    ALPAKA_FN_ACC __forceinline__ void operator()(const T_Acc& acc, T const* ci, T* co, int32_t size, int32_t* pc) {
+    ALPAKA_FN_INLINE void operator()(const T_Acc& acc, T const* ci, T* co, int32_t size, int32_t* pc) {
       uint32_t const gridDimension(alpaka::workdiv::getWorkDiv<alpaka::Grid, alpaka::Blocks>(acc)[0u]);
       uint32_t const blockDimension(alpaka::workdiv::getWorkDiv<alpaka::Block, alpaka::Threads>(acc)[0u]);
       uint32_t const gridBlockIdx(alpaka::idx::getIdx<alpaka::Grid, alpaka::Blocks>(acc)[0u]);
       uint32_t const blockThreadIdx(alpaka::idx::getIdx<alpaka::Block, alpaka::Threads>(acc)[0u]);
       
-      auto&& T ws = alpaka::block::shared::st::allocVar<T, 32>(acc);
+      auto&& ws = alpaka::block::shared::st::allocVar<T, 32>(acc);
       // first each block does a scan of size 1024; (better be enough blocks....)
       assert(gridDimension <= 1024);
       assert(blockDimension * gridDimension >= size);
@@ -152,9 +154,9 @@ namespace cms {
         blockPrefixScan(ci + off, co + off, std::min(int(blockDimension), size - off), ws);
 
       // count blocks that finished
-      auto&& bool isLastBlockDone = alpaka::block::shared::st::allocVar<bool, 1>(acc);
+      auto&& isLastBlockDone = alpaka::block::shared::st::allocVar<bool, 1>(acc);
       if (0 == blockThreadIdx) {
-        auto value = atomicAdd(pc, 1);  // block counter
+        auto value = alpaka::atomic::atomicOp<alpaka::atomic::op::Add>(acc, pc, 1);  // block counter
         isLastBlockDone = (value == (int(gridDimension) - 1));
       }
 
@@ -170,7 +172,7 @@ namespace cms {
       // let's get the partial sums from each block
       T* psum = alpaka::block::shared::dyn::getMem<T, 1>(acc);
 
-      extern __shared__ T psum[];
+      // extern __shared__ T psum[];
       for (int i = blockThreadIdx, ni = gridDimension; i < ni; i += blockDimension) {
         auto j = blockDimension * i + blockDimension -1;
         psum[i] = (j < size) ? co[j] : T(0);
