@@ -45,7 +45,7 @@ namespace cms {
                                                              = nullptr
 #endif
     ) {
-#ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
+#if defined ALPAKA_ACC_GPU_CUDA_ENABLED and __CUDA_ARCH__
 
       uint32_t const blockDimension(alpaka::workdiv::getWorkDiv<alpaka::Block, alpaka::Threads>(acc)[0u]);
       uint32_t const gridBlockIdx(alpaka::idx::getIdx<alpaka::Grid, alpaka::Blocks>(acc)[0u]);
@@ -55,9 +55,9 @@ namespace cms {
       assert(0 == blockDimension % 32);
       auto first = blockThreadIdx;
       auto mask = __ballot_sync(0xffffffff, first < size);
+      auto laneId = blockThreadIdx & 0x1f;
 
       for (auto i = first; i < size; i += blockDimension) {
-        auto laneId = blockThreadIdx & 0x1f;
         warpPrefixScan(laneId, ci, co, i, mask);
         auto warpId = i / 32;
         assert(warpId < 32);
@@ -69,11 +69,12 @@ namespace cms {
       if (size <= 32)
         return;
       if (blockThreadIdx < 32)
-        auto laneId = blockThreadIdx & 0x1f;
+      {
         warpPrefixScan(laneId, ws, blockThreadIdx, 0xffffffff);
+      }
       alpaka::block::sync::syncBlockThreads(acc);
       for (auto i = first + 32; i < size; i += blockDimension) {
-        auto warpId = i / 32;
+        uint32_t warpId = i / 32;
         co[i] += ws[warpId - 1];
       }
       alpaka::block::sync::syncBlockThreads(acc);
@@ -93,7 +94,7 @@ namespace cms {
                                                             = nullptr
 #endif
     ) {
-#ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
+#if defined ALPAKA_ACC_GPU_CUDA_ENABLED and __CUDA_ARCH__
       uint32_t const blockDimension(alpaka::workdiv::getWorkDiv<alpaka::Block, alpaka::Threads>(acc)[0u]);
       uint32_t const gridBlockIdx(alpaka::idx::getIdx<alpaka::Grid, alpaka::Blocks>(acc)[0u]);
       uint32_t const blockThreadIdx(alpaka::idx::getIdx<alpaka::Block, alpaka::Threads>(acc)[0u]);
@@ -102,10 +103,10 @@ namespace cms {
       assert(0 == blockDimension % 32);
       auto first = blockThreadIdx;
       auto mask = __ballot_sync(0xffffffff, first < size);
+      auto laneId = blockThreadIdx & 0x1f;
 
       for (auto i = first; i < size; i += blockDimension) {
-        warpPrefixScan(c, i, mask);
-        auto laneId = blockThreadIdx & 0x1f;
+        warpPrefixScan(laneId,c, i, mask);
         auto warpId = i / 32;
         assert(warpId < 32);
         if (31 == laneId)
@@ -116,7 +117,9 @@ namespace cms {
       if (size <= 32)
         return;
       if (blockThreadIdx < 32)
-        warpPrefixScan(ws, blockThreadIdx, 0xffffffff);
+      {
+        warpPrefixScan(laneId, ws, blockThreadIdx, 0xffffffff);
+      }
       alpaka::block::sync::syncBlockThreads(acc);
       for (auto i = first + 32; i < size; i += blockDimension) {
         auto warpId = i / 32;

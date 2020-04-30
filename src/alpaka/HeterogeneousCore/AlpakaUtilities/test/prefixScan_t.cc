@@ -4,7 +4,12 @@
 #include "HeterogeneousCore/AlpakaUtilities/interface/prefixScan.h"
 
 using namespace cms::Alpaka;
+#ifdef ALPAKA_ACC_CPU_B_SEQ_T_SEQ_SYNC_BACKEND
 using namespace alpaka_serial_sync;
+#endif
+#ifdef ALPAKA_ACC_GPU_CUDA_ASYNC_BACKEND
+using namespace alpaka_cuda_async;
+#endif
 
 template <typename T>
 struct format_traits {
@@ -118,10 +123,13 @@ int main() {
   Vec elementsPerThread(Vec::all(1));
   Vec threadsPerBlock(Vec::all(32));
   Vec blocksPerGrid(Vec::all(1));
-#if defined ALPAKA_ACC_CPU_B_SEQ_T_SEQ_ENABLED || ALPAKA_ACC_CPU_B_TBB_T_SEQ_ENABLED || ALPAKA_ACC_CPU_B_OMP2_T_SEQ_ENABLED || ALPAKA_ACC_CPU_BT_OMP4_ENABLED
+#if defined ALPAKA_ACC_CPU_B_TBB_T_SEQ_ENABLED || ALPAKA_ACC_CPU_B_OMP2_T_SEQ_ENABLED || ALPAKA_ACC_CPU_BT_OMP4_ENABLED
   // on the GPU, run with 512 threads in parallel per block, each looking at a single element
   // on the CPU, run serially with a single thread per block, over 512 elements
   std::swap(threadsPerBlock, elementsPerThread);
+#endif
+#if defined ALPAKA_ACC_CPU_B_SEQ_T_SEQ_ENABLED
+  threadsPerBlock = Vec::all(1);
 #endif
   
   const WorkDiv workDiv(blocksPerGrid, threadsPerBlock, elementsPerThread);
@@ -147,8 +155,12 @@ int main() {
   alpaka::wait::wait(queue);
 #endif  
   std::cout << "block level" << std::endl;
-  for (int bs = 32; bs <= 1024; bs += 32) {
-    // std::cout << "bs " << bs << std::endl;
+  int bs = 1;
+#if not defined ALPAKA_ACC_CPU_B_SEQ_T_SEQ_ENABLED
+
+  for (bs = 32; bs <= 1024; bs += 32) {
+#endif
+    std::cout << "bs " << bs << std::endl;
     for (int j = 1; j <= 1024; ++j) {
       // running kernel with 1 block, bs threads per block, 1 element per thread
       alpaka::queue::enqueue(
@@ -160,7 +172,11 @@ int main() {
             alpaka::kernel::createTaskKernel<Acc>(WorkDiv{Vec::all(1),Vec::all(bs),Vec::all(1)}, testPrefixScan<float>(), j));
       alpaka::wait::wait(queue);
     }
+#if not defined ALPAKA_ACC_CPU_B_SEQ_T_SEQ_ENABLED
+  
   }
+#endif
+
   alpaka::wait::wait(queue);
 
   int num_items = 200;
@@ -181,8 +197,11 @@ int main() {
 
     auto output2_dBuf = alpaka::mem::buf::alloc<uint32_t, Idx>(device, Vec::all(num_items * sizeof(uint32_t)));
     uint32_t* output2_d = alpaka::mem::view::getPtrNative(output2_dBuf);
-
+#if defined ALPAKA_ACC_CPU_B_SEQ_T_SEQ_ENABLED
+    auto nthreads = 1;
+#else
     auto nthreads = 256;
+#endif
     auto nblocks = (num_items + nthreads - 1) / nthreads;
 
     alpaka::queue::enqueue(
