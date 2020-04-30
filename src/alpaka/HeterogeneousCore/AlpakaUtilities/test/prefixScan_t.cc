@@ -21,9 +21,9 @@ template <typename T>
 struct testPrefixScan {
 template <typename T_Acc>
 ALPAKA_FN_ACC void operator()(const T_Acc& acc, uint32_t size) const {
-  auto&&  ws = alpaka::block::shared::st::allocVar<T, 32>(acc);
-  auto&&  c = alpaka::block::shared::st::allocVar<T, 1024>(acc);
-  auto&&  co = alpaka::block::shared::st::allocVar<T, 1024>(acc);
+  auto&&  ws = alpaka::block::shared::st::allocVar<T[32],  __COUNTER__>(acc);
+  auto&&  c = alpaka::block::shared::st::allocVar<T[1024],  __COUNTER__>(acc);
+  auto&&  co = alpaka::block::shared::st::allocVar<T[1024],  __COUNTER__>(acc);
 
   uint32_t const blockDimension(alpaka::workdiv::getWorkDiv<alpaka::Block, alpaka::Threads>(acc)[0u]);
   uint32_t const blockThreadIdx(alpaka::idx::getIdx<alpaka::Block, alpaka::Threads>(acc)[0u]);
@@ -33,8 +33,8 @@ ALPAKA_FN_ACC void operator()(const T_Acc& acc, uint32_t size) const {
     c[i] = 1;
   alpaka::block::sync::syncBlockThreads(acc);
 
-  blockPrefixScan(c, co, size, ws);
-  blockPrefixScan(c, size, ws);
+  blockPrefixScan<T>(c, co, size, ws);
+  blockPrefixScan<T>(c, size, ws);
 
   assert(1 == c[0]);
   assert(1 == co[0]);
@@ -174,13 +174,13 @@ int main() {
     uint32_t *d_out1;
     uint32_t *d_out2;
 
-    auto input_dBuf = alpaka::mem::buf::alloc<uint32_t, Idx>(device, num_items * sizeof(uint32_t));
+    auto input_dBuf = alpaka::mem::buf::alloc<uint32_t, Idx>(device, Vec::all(num_items * sizeof(uint32_t)));
     uint32_t* input_d = alpaka::mem::view::getPtrNative(input_dBuf);
 
-    auto output1_dBuf = alpaka::mem::buf::alloc<uint32_t, Idx>(device, num_items * sizeof(uint32_t));
+    auto output1_dBuf = alpaka::mem::buf::alloc<uint32_t, Idx>(device, Vec::all(num_items * sizeof(uint32_t)));
     uint32_t* output1_d = alpaka::mem::view::getPtrNative(output1_dBuf);
 
-    auto output2_dBuf = alpaka::mem::buf::alloc<uint32_t, Idx>(device, num_items * sizeof(uint32_t));
+    auto output2_dBuf = alpaka::mem::buf::alloc<uint32_t, Idx>(device, Vec::all(num_items * sizeof(uint32_t)));
     uint32_t* output2_d = alpaka::mem::view::getPtrNative(output2_dBuf);
 
     auto nthreads = 256;

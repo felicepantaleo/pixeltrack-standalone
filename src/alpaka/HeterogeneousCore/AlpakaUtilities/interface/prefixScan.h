@@ -7,7 +7,7 @@
 #ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
 
 template <typename T>
-ALPAKA_FN_INLINE void warpPrefixScan(uint32_t laneId, T const* __restrict__ ci, T* __restrict__ co, uint32_t i, uint32_t mask) {
+ALPAKA_FN_HOST_ACC ALPAKA_FN_INLINE void warpPrefixScan(uint32_t laneId, T const* __restrict__ ci, T* __restrict__ co, uint32_t i, uint32_t mask) {
   // ci and co may be the same
   auto x = ci[i];
 #pragma unroll
@@ -20,7 +20,7 @@ ALPAKA_FN_INLINE void warpPrefixScan(uint32_t laneId, T const* __restrict__ ci, 
 }
 
 template <typename T>
-ALPAKA_FN_INLINE void warpPrefixScan(uint32_t laneId, T* c, uint32_t i, uint32_t mask) {
+ALPAKA_FN_HOST_ACC ALPAKA_FN_INLINE void warpPrefixScan(uint32_t laneId, T* c, uint32_t i, uint32_t mask) {
   auto x = c[i];
 #pragma unroll
   for (int offset = 1; offset < 32; offset <<= 1) {
@@ -36,16 +36,15 @@ ALPAKA_FN_INLINE void warpPrefixScan(uint32_t laneId, T* c, uint32_t i, uint32_t
 namespace cms {
   namespace Alpaka {
     // limited to 32*32 elements....
-    struct blockPrefixScan {
-    template <typename T, typename T_Acc>
-    ALPAKA_FN_INLINE  void operator()(const T_Acc& acc, T const* __restrict__ ci,
+    template <typename T_Acc, typename T>
+    ALPAKA_FN_HOST_ACC ALPAKA_FN_INLINE  void blockPrefixScan(const T_Acc& acc, T const* __restrict__ ci,
                                                              T* __restrict__ co,
                                                              uint32_t size,
                                                              T* ws
 #ifndef ALPAKA_ACC_GPU_CUDA_ENABLED
                                                              = nullptr
 #endif
-    ) const {
+    ) {
 #ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
 
       uint32_t const blockDimension(alpaka::workdiv::getWorkDiv<alpaka::Block, alpaka::Threads>(acc)[0u]);
@@ -85,15 +84,15 @@ namespace cms {
 #endif
     }
 
-    template <typename T, typename T_Acc>
-    ALPAKA_FN_INLINE void operator()(const T_Acc& acc, 
+    template <typename T_Acc, typename T>
+    ALPAKA_FN_HOST_ACC ALPAKA_FN_INLINE void blockPrefixScan(const T_Acc& acc, 
                                                             T* c,
                                                             uint32_t size,
                                                             T* ws
 #ifndef ALPAKA_ACC_GPU_CUDA_ENABLED
                                                             = nullptr
 #endif
-    ) const {
+    ) {
 #ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
       uint32_t const blockDimension(alpaka::workdiv::getWorkDiv<alpaka::Block, alpaka::Threads>(acc)[0u]);
       uint32_t const gridBlockIdx(alpaka::idx::getIdx<alpaka::Grid, alpaka::Blocks>(acc)[0u]);
@@ -129,17 +128,17 @@ namespace cms {
         c[i] += c[i - 1];
 #endif
     }
-    };
+    
     // same as above, may remove
     // limited to 32*32 elements....
     // struct blockPrefixScan {
-    // ....... copy from ALPAKA_FN_INLINE...
+    // ....... copy from ALPAKA_FN_HOST_ACC ALPAKA_FN_INLINE...
     // };
 
     // limited to 1024*1024 elements....
     struct multiBlockPrefixScan {
     template <typename T, typename T_Acc>
-    ALPAKA_FN_INLINE void operator()(const T_Acc& acc, T const* ci, T* co, int32_t size, int32_t* pc) {
+    ALPAKA_FN_ACC ALPAKA_FN_INLINE void operator()(const T_Acc& acc, T const* ci, T* co, int32_t size, int32_t* pc) {
       uint32_t const gridDimension(alpaka::workdiv::getWorkDiv<alpaka::Grid, alpaka::Blocks>(acc)[0u]);
       uint32_t const blockDimension(alpaka::workdiv::getWorkDiv<alpaka::Block, alpaka::Threads>(acc)[0u]);
       uint32_t const gridBlockIdx(alpaka::idx::getIdx<alpaka::Grid, alpaka::Blocks>(acc)[0u]);
