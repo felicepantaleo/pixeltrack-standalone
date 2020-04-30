@@ -17,9 +17,9 @@ struct format_traits<float> {
 public:
   static const constexpr char *failed_msg = "failed %d %d %d: %f %f\n";
 };
-
+template <typename T>
 struct testPrefixScan {
-template <typename T, typename T_Acc>
+template <typename T_Acc>
 ALPAKA_FN_ACC void operator()(const T_Acc& acc, uint32_t size) const {
   auto&&  ws = alpaka::block::shared::st::allocVar<T, 32>(acc);
   auto&&  c = alpaka::block::shared::st::allocVar<T, 1024>(acc);
@@ -48,12 +48,13 @@ ALPAKA_FN_ACC void operator()(const T_Acc& acc, uint32_t size) const {
 }
 };
 
+template <typename T>
 struct testWarpPrefixScan {
-template <typename T, typename T_Acc>
+template <typename T_Acc>
 ALPAKA_FN_ACC void operator()(const T_Acc& acc, uint32_t size) const {
   assert(size <= 32);
-  auto&&  c = alpaka::block::shared::st::allocVar<T, 1024>(acc);
-  auto&&  co = alpaka::block::shared::st::allocVar<T, 1024>(acc);
+  auto&&  c = alpaka::block::shared::st::allocVar<T[1024], __COUNTER__>(acc);
+  auto&&  co = alpaka::block::shared::st::allocVar<T[1024], __COUNTER__>(acc);
 
   uint32_t const blockDimension(alpaka::workdiv::getWorkDiv<alpaka::Block, alpaka::Threads>(acc)[0u]);
   uint32_t const blockThreadIdx(alpaka::idx::getIdx<alpaka::Block, alpaka::Threads>(acc)[0u]);
@@ -61,8 +62,12 @@ ALPAKA_FN_ACC void operator()(const T_Acc& acc, uint32_t size) const {
   c[i] = 1;
   alpaka::block::sync::syncBlockThreads(acc);
   auto laneId = blockThreadIdx & 0x1f;
+  #ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
+
   warpPrefixScan(laneId, c, co, i, 0xffffffff);
   warpPrefixScan(laneId, c, i, 0xffffffff);
+  #endif
+
   alpaka::block::sync::syncBlockThreads(acc);
 
   assert(1 == c[0]);
@@ -76,6 +81,7 @@ ALPAKA_FN_ACC void operator()(const T_Acc& acc, uint32_t size) const {
   }
 }
 };
+
 
 struct init {
 template <typename T_Acc>
@@ -112,8 +118,8 @@ int main() {
   Queue queue(device);
 
   Vec elementsPerThread(Vec::all(1));
-  Vec threadsPerBlock(Vec::all(512));
-  Vec blocksPerGrid(Vec::all((input.wordCounter + 512 - 1) / 512));
+  Vec threadsPerBlock(Vec::all(32));
+  Vec blocksPerGrid(Vec::all(1));
 #if defined ALPAKA_ACC_CPU_B_SEQ_T_SEQ_ENABLED || ALPAKA_ACC_CPU_B_TBB_T_SEQ_ENABLED || ALPAKA_ACC_CPU_B_OMP2_T_SEQ_ENABLED || ALPAKA_ACC_CPU_BT_OMP4_ENABLED
   // on the GPU, run with 512 threads in parallel per block, each looking at a single element
   // on the CPU, run serially with a single thread per block, over 512 elements
@@ -128,17 +134,17 @@ int main() {
 
   alpaka::queue::enqueue(
           queue,
-          alpaka::kernel::createTaskKernel<Acc>(workDiv, testWarpPrefixScan(), 32);
+          alpaka::kernel::createTaskKernel<Acc>(workDiv, testWarpPrefixScan<int>(), 32));
   alpaka::wait::wait(queue);
 
   alpaka::queue::enqueue(
           queue,
-          alpaka::kernel::createTaskKernel<Acc>(workDiv, testWarpPrefixScan(), 16);
+          alpaka::kernel::createTaskKernel<Acc>(workDiv, testWarpPrefixScan<int>(), 16));
   alpaka::wait::wait(queue);
 
   alpaka::queue::enqueue(
           queue,
-          alpaka::kernel::createTaskKernel<Acc>(workDiv, testWarpPrefixScan(), 5);
+          alpaka::kernel::createTaskKernel<Acc>(workDiv, testWarpPrefixScan<int>(), 5));
   alpaka::wait::wait(queue);
   
   std::cout << "block level" << std::endl;
@@ -148,11 +154,11 @@ int main() {
       // running kernel with 1 block, bs threads per block, 1 element per thread
       alpaka::queue::enqueue(
             queue,
-            alpaka::kernel::createTaskKernel<Acc>({Vec::all(1),Vec::all(bs),Vec::all(1)}, testPrefixScan<uint16_t>(), j);
+            alpaka::kernel::createTaskKernel<Acc>(WorkDiv{Vec::all(1),Vec::all(bs),Vec::all(1)}, testPrefixScan<uint16_t>(), j));
       alpaka::wait::wait(queue);
       alpaka::queue::enqueue(
             queue,
-            alpaka::kernel::createTaskKernel<Acc>({Vec::all(1),Vec::all(bs),Vec::all(1)}, testPrefixScan<float>(), j);
+            alpaka::kernel::createTaskKernel<Acc>(WorkDiv{Vec::all(1),Vec::all(bs),Vec::all(1)}, testPrefixScan<float>(), j));
       alpaka::wait::wait(queue);
     }
   }
@@ -180,20 +186,17 @@ int main() {
     auto nthreads = 256;
     auto nblocks = (num_items + nthreads - 1) / nthreads;
 
-    init<<<nblocks, nthreads, 0>>>(d_in, 1, num_items);
-
-
     alpaka::queue::enqueue(
           queue,
-          alpaka::kernel::createTaskKernel<Acc>({Vec::all(nblocks),Vec::all(nthreads),Vec::all(1)}, init(), input_d, 1, num_items);
+          alpaka::kernel::createTaskKernel<Acc>(WorkDiv{Vec::all(nblocks),Vec::all(nthreads),Vec::all(1)}, init(), input_d, 1, num_items));
     alpaka::wait::wait(queue);
     // the block counter
     // cudaCheck(cudaMalloc(&d_pc, sizeof(int32_t)));
     // cudaCheck(cudaMemset(d_pc, 0, 4));
     // the block counter
-    auto pc_dBuf = alpaka::mem::buf::alloc<uint32_t, Idx>(device, sizeof(uint32_t));
-    uint32_t* pc_d = alpaka::mem::view::getPtrNative(pc_dBuf);
-    alpaka::mem::view::set(queue, pc_dBuf, 0,4);
+    // auto pc_dBuf = alpaka::mem::buf::alloc<int, Idx>(device, sizeof(int));
+    // int* pc_d = alpaka::mem::view::getPtrNative(pc_dBuf);
+    // alpaka::mem::view::set(queue, pc_dBuf, 0, 4);
 
     // nthreads = 512+256;
     // nblocks = (num_items + nthreads - 1) / nthreads;

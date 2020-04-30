@@ -145,7 +145,7 @@ namespace cms {
       uint32_t const gridBlockIdx(alpaka::idx::getIdx<alpaka::Grid, alpaka::Blocks>(acc)[0u]);
       uint32_t const blockThreadIdx(alpaka::idx::getIdx<alpaka::Block, alpaka::Threads>(acc)[0u]);
       
-      auto&& ws = alpaka::block::shared::st::allocVar<T, 32>(acc);
+      auto&& ws = alpaka::block::shared::st::allocVar<T[32], __COUNTER__>(acc);
       // first each block does a scan of size 1024; (better be enough blocks....)
       assert(gridDimension <= 1024);
       assert(blockDimension * gridDimension >= size);
@@ -154,7 +154,7 @@ namespace cms {
         blockPrefixScan(ci + off, co + off, std::min(int(blockDimension), size - off), ws);
 
       // count blocks that finished
-      auto&& isLastBlockDone = alpaka::block::shared::st::allocVar<bool, 1>(acc);
+      auto&& isLastBlockDone = alpaka::block::shared::st::allocVar<bool, __COUNTER__>(acc);
       if (0 == blockThreadIdx) {
         auto value = alpaka::atomic::atomicOp<alpaka::atomic::op::Add>(acc, pc, 1);  // block counter
         isLastBlockDone = (value == (int(gridDimension) - 1));
