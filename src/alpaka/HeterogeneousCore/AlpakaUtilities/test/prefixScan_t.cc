@@ -4,6 +4,7 @@
 #include "HeterogeneousCore/AlpakaUtilities/interface/prefixScan.h"
 
 using namespace cms::Alpaka;
+using namespace alpaka_serial_sync;
 
 template <typename T>
 struct format_traits {
