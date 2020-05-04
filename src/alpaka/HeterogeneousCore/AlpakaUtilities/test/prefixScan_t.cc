@@ -212,18 +212,18 @@ int main() {
     // cudaCheck(cudaMalloc(&d_pc, sizeof(int32_t)));
     // cudaCheck(cudaMemset(d_pc, 0, 4));
     // the block counter
-    // auto pc_dBuf = alpaka::mem::buf::alloc<int, Idx>(device, sizeof(int));
-    // int* pc_d = alpaka::mem::view::getPtrNative(pc_dBuf);
-    // alpaka::mem::view::set(queue, pc_dBuf, 0, 4);
+    auto pc_dBuf = alpaka::mem::buf::alloc<int32_t, Idx>(device, Vec::all(sizeof(int32_t)));
+    int32_t* pc_d = alpaka::mem::view::getPtrNative(pc_dBuf);
+    alpaka::mem::view::set(queue, pc_dBuf, 0u, Vec::all(4));
 
-    // nthreads = 512+256;
-    // nblocks = (num_items + nthreads - 1) / nthreads;
-    // std::cout << "launch multiBlockPrefixScan " << num_items <<' '<< nblocks << std::endl;
+    nthreads = 512+256;
+    nblocks = (num_items + nthreads - 1) / nthreads;
+    std::cout << "launch multiBlockPrefixScan " << num_items <<' '<< nblocks << std::endl;
     // // multiBlockPrefixScan<<<nblocks, nthreads, 4*nblocks>>>(input_d, output1_d, num_items, d_pc);
-    // alpaka::queue::enqueue(
-    //       queue,
-    //       alpaka::kernel::createTaskKernel<Acc>({Vec::all(nblocks),Vec::all(nthreads),Vec::all(1)}, multiBlockPrefixScan(), input_d, output1_d, num_items, pc_d);
-    // alpaka::wait::wait(queue);
+    alpaka::queue::enqueue(
+          queue,
+          alpaka::kernel::createTaskKernel<Acc>(WorkDiv{Vec::all(nblocks),Vec::all(nthreads),Vec::all(1)}, multiBlockPrefixScan(), input_d, output1_d, num_items, pc_d));
+    alpaka::wait::wait(queue);
 
 
     // cudaCheck(cudaGetLastError());
