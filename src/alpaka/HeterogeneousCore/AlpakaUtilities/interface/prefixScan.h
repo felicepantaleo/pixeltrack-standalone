@@ -172,7 +172,7 @@ namespace cms {
         // good each block has done its work and now we are left in last block
 
         // let's get the partial sums from each block
-        T* psum = alpaka::block::shared::dyn::getMem<T, 1>(acc);
+        T* psum = alpaka::block::shared::dyn::getMem<T>(acc);
 
         // extern __shared__ T psum[];
         for (int i = blockThreadIdx, ni = gridDimension; i < ni; i += blockDimension) {
