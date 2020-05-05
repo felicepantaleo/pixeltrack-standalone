@@ -139,9 +139,10 @@ namespace cms {
     // };
 
     // limited to 1024*1024 elements....
+    template <typename T>
     struct multiBlockPrefixScan {
-    template <typename T, typename T_Acc>
-    ALPAKA_FN_ACC ALPAKA_FN_INLINE void operator()(const T_Acc& acc, T const* ci, T* co, int32_t size, int32_t* pc) {
+    template<typename T_Acc>
+    ALPAKA_FN_ACC void operator()(const T_Acc& acc, T const* ci, T* co, T* psum,  int32_t size) const {
       uint32_t const gridDimension(alpaka::workdiv::getWorkDiv<alpaka::Grid, alpaka::Blocks>(acc)[0u]);
       uint32_t const blockDimension(alpaka::workdiv::getWorkDiv<alpaka::Block, alpaka::Threads>(acc)[0u]);
       uint32_t const gridBlockIdx(alpaka::idx::getIdx<alpaka::Grid, alpaka::Blocks>(acc)[0u]);
@@ -150,37 +151,18 @@ namespace cms {
       auto&& ws = alpaka::block::shared::st::allocVar<T[32], __COUNTER__>(acc);
       // first each block does a scan of size 1024; (better be enough blocks....)
       assert(gridDimension <= 1024);
-      assert(blockDimension * gridDimension >= size);
       int off = blockDimension * gridBlockIdx;
       if (size - off > 0)
-        blockPrefixScan(ci + off, co + off, std::min(int(blockDimension), size - off), ws);
-
-      // count blocks that finished
-      auto&& isLastBlockDone = alpaka::block::shared::st::allocVar<bool, __COUNTER__>(acc);
-      if (0 == blockThreadIdx) {
-        auto value = alpaka::atomic::atomicOp<alpaka::atomic::op::Add>(acc, pc, 1);  // block counter
-        isLastBlockDone = (value == (int(gridDimension) - 1));
-      }
+        blockPrefixScan(acc, ci + off, co + off, std::min(int(blockDimension), size - off), ws);
 
       alpaka::block::sync::syncBlockThreads(acc);
 
-      if (!isLastBlockDone)
-        return;
-
-      assert(int(gridDimension)==*pc);
-
-      // good each block has done its work and now we are left in last block
-
-      // let's get the partial sums from each block
-      T* psum = alpaka::block::shared::dyn::getMem<T, 1>(acc);
-
-      // extern __shared__ T psum[];
       for (int i = blockThreadIdx, ni = gridDimension; i < ni; i += blockDimension) {
         auto j = blockDimension * i + blockDimension -1;
         psum[i] = (j < size) ? co[j] : T(0);
       }
       alpaka::block::sync::syncBlockThreads(acc);
-      blockPrefixScan(psum, psum, gridDimension, ws);
+      blockPrefixScan(acc, psum, psum, gridDimension, ws);
 
       // now it would have been handy to have the other blocks around...
       int first = blockThreadIdx;                                 // + blockDimension * gridBlockIdx
