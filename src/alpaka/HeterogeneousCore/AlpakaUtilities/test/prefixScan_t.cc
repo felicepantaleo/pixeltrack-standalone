@@ -106,7 +106,8 @@ ALPAKA_FN_ACC void operator()(const T_Acc& acc, uint32_t const *v, uint32_t n) c
   uint32_t const blockDimension(alpaka::workdiv::getWorkDiv<alpaka::Block, alpaka::Threads>(acc)[0u]);
   uint32_t const gridBlockIdx(alpaka::idx::getIdx<alpaka::Grid, alpaka::Blocks>(acc)[0u]);
   uint32_t const blockThreadIdx(alpaka::idx::getIdx<alpaka::Block, alpaka::Threads>(acc)[0u]);
-  auto i = gridBlockIdx * blockDimension + blockThreadIdx;  if (i < n)
+  auto i = gridBlockIdx * blockDimension + blockThreadIdx;  
+  if (i < n)
     assert(v[i] == i + 1);
   if (i == 0)
     printf("verify\n");
