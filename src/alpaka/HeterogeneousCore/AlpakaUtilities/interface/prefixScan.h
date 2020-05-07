@@ -140,7 +140,7 @@ namespace cms {
 
     // limited to 1024*1024 elements....
     template <typename T>
-    struct multiBlockPrefixScan {
+    struct multiBlockPrefixScanFirstStep {
     template<typename T_Acc>
     ALPAKA_FN_ACC void operator()(const T_Acc& acc, T const* ci, T* co, T* psum,  int32_t size) const {
       uint32_t const gridDimension(alpaka::workdiv::getWorkDiv<alpaka::Grid, alpaka::Blocks>(acc)[0u]);
@@ -156,27 +156,48 @@ namespace cms {
       int off = blockDimension * blockIdx *threadDimension ;
       if (size - off > 0)
         blockPrefixScan(acc, ci + off, co + off, std::min(int(blockDimension*threadDimension), size - off), ws);
+    }
+    };
 
-      alpaka::block::sync::syncBlockThreads(acc);
-      if(blockIdx == 0)
+
+        // limited to 1024*1024 elements....
+    template <typename T>
+    struct multiBlockPrefixScanSecondStep {
+    template<typename T_Acc>
+    ALPAKA_FN_ACC void operator()(const T_Acc& acc, T const* ci, T* co, T* psum,  int32_t size, int32_t numBlocks) const {
+      uint32_t const blockDimension(alpaka::workdiv::getWorkDiv<alpaka::Block, alpaka::Threads>(acc)[0u]);
+      uint32_t const threadDimension(alpaka::workdiv::getWorkDiv<alpaka::Thread, alpaka::Elems>(acc)[0u]);
+
+      uint32_t const blockIdx(alpaka::idx::getIdx<alpaka::Grid, alpaka::Blocks>(acc)[0u]);
+      uint32_t const threadIdx(alpaka::idx::getIdx<alpaka::Block, alpaka::Threads>(acc)[0u]);
+      
+      auto&& ws = alpaka::block::shared::st::allocVar<T[32], __COUNTER__>(acc);
+      // first each block does a scan of size 1024; (better be enough blocks....)
+      assert(blockDimension*threadDimension >=numBlocks);
+      for(int elemId = 0; elemId<threadDimension; ++elemId)
       {
+        int index =+ threadIdx*threadDimension+elemId;
         
-        for (int elemId =0, i = threadIdx*threadDimension+elemId, ni = gridDimension/threadDimension; i < ni; i += blockDimension*threadDimension, ++elemId) {
-          auto j = blockDimension * i*threadDimension + blockDimension*threadDimension -1;
-          psum[i] = (j < size) ? co[j] : T(0);
-        }
-        alpaka::block::sync::syncBlockThreads(acc);
-        blockPrefixScan(acc, psum, psum, gridDimension/threadDimension, ws);
-
-        for(int elemId = 0; elemId < threadDimension; ++elemId)
+        if(index < numBlocks)
         {
-          int first = threadIdx * threadDimension+elemId;                                 // + blockDimension * blockIdx
-          for (int i = first + blockDimension* threadDimension; i < size; i += blockDimension* threadDimension) {  //  *gridDimension) {
-            auto k = i / (blockDimension* threadDimension);                                     // block
-            co[i] += psum[k - 1];
-          }
+          int lastElementOfPreviousBlockId = index*blockDimension*threadDimension -1;
+          psum[index] = (lastElementOfPreviousBlockId < size and lastElementOfPreviousBlockId >= 0) ? co[lastElementOfPreviousBlockId] : T(0);
         }
       }
+    
+      alpaka::block::sync::syncBlockThreads(acc);
+
+      blockPrefixScan(acc, psum, psum, numBlocks, ws);
+
+      for(int elemId = 0; elemId < threadDimension; ++elemId)
+      {
+        int first = threadIdx * threadDimension+elemId;                                 // + blockDimension * blockIdx
+        for (int i = first + blockDimension* threadDimension; i < size; i += blockDimension* threadDimension) {  //  *gridDimension) {
+          auto k = i / (blockDimension* threadDimension);                                     // block
+          co[i] += psum[k];
+        }
+      }
+    
 
     }
     };

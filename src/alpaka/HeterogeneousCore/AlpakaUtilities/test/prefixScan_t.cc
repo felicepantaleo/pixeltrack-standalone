@@ -89,28 +89,41 @@ ALPAKA_FN_ACC void operator()(const T_Acc& acc, uint32_t size) const {
 struct init {
 template <typename T_Acc>
 ALPAKA_FN_ACC void operator()(const T_Acc& acc, uint32_t *v, uint32_t val, uint32_t n) const {
-  uint32_t const blockDimension(alpaka::workdiv::getWorkDiv<alpaka::Block, alpaka::Threads>(acc)[0u]);
-  uint32_t const gridBlockIdx(alpaka::idx::getIdx<alpaka::Grid, alpaka::Blocks>(acc)[0u]);
-  uint32_t const blockThreadIdx(alpaka::idx::getIdx<alpaka::Block, alpaka::Threads>(acc)[0u]);
-  auto i = gridBlockIdx * blockDimension + blockThreadIdx;
-  if (i < n)
-    v[i] = val;
-  if (i == 0)
-    printf("init\n");
+  uint32_t const threadDimension(alpaka::workdiv::getWorkDiv<alpaka::Thread, alpaka::Elems>(acc)[0u]);
+  uint32_t const threadIdxInGrid(alpaka::idx::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0u]);
+
+  for(int i = 0; i<threadDimension; ++i)
+  {
+    int index = threadIdxInGrid*threadDimension+i;
+    if (index < n){
+      v[index] = val;
+      // printf("init: index: %d %d \n", index, v[index] );
+
+    }
+
+    if (index == 0)
+      printf("init\n");
+  }
+
 }
 };
 
 struct verify {
 template <typename T_Acc>
 ALPAKA_FN_ACC void operator()(const T_Acc& acc, uint32_t const *v, uint32_t n) const {
-  uint32_t const blockDimension(alpaka::workdiv::getWorkDiv<alpaka::Block, alpaka::Threads>(acc)[0u]);
-  uint32_t const gridBlockIdx(alpaka::idx::getIdx<alpaka::Grid, alpaka::Blocks>(acc)[0u]);
-  uint32_t const blockThreadIdx(alpaka::idx::getIdx<alpaka::Block, alpaka::Threads>(acc)[0u]);
-  auto i = gridBlockIdx * blockDimension + blockThreadIdx;  
-  if (i < n)
-    assert(v[i] == i + 1);
-  if (i == 0)
-    printf("verify\n");
+
+  uint32_t const threadDimension(alpaka::workdiv::getWorkDiv<alpaka::Thread, alpaka::Elems>(acc)[0u]);
+  uint32_t const threadIdxInGrid(alpaka::idx::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0u]);
+
+  for(int i = 0; i<threadDimension; ++i)
+  {
+    int index = threadIdxInGrid*threadDimension+i;
+    if (index < n)
+      // printf("verify: index: %d %d \n", index, v[index] );
+      assert(v[index] == index + 1);
+    if (index == 0)
+      printf("verify\n");
+  }
 }
 };
 
@@ -185,7 +198,7 @@ int main() {
     // test multiblock
     std::cout << "multiblock" << std::endl;
     // Declare, allocate, and initialize device-accessible pointers for input and output
-    num_items *= 10;
+    num_items *= 8;
     uint32_t *d_in;
     uint32_t *d_out1;
     uint32_t *d_out2;
@@ -212,12 +225,14 @@ int main() {
     uint32_t* psum_d = alpaka::mem::view::getPtrNative(psum_dBuf);
     
     alpaka::mem::view::set(queue, psum_dBuf, 0u, Vec::all(num_items * sizeof(uint32_t)));
+
+    
 #if defined ALPAKA_ACC_CPU_B_SEQ_T_SEQ_ENABLED
     nthreads = 1;
-    auto nelements = 512+256;
+    auto nelements = 768;
     nblocks = (num_items + nelements - 1) / nelements;
 #else
-    nthreads = 512+256;
+    nthreads = 768;
     auto nelements = 1;
     nblocks = (num_items + nthreads - 1) / nthreads;
 #endif
@@ -225,12 +240,13 @@ int main() {
     std::cout << "launch multiBlockPrefixScan " << num_items <<' '<< nblocks << std::endl;
     alpaka::queue::enqueue(
           queue,
-          alpaka::kernel::createTaskKernel<Acc>(WorkDiv{Vec::all(nblocks),Vec::all(nthreads),Vec::all(nelements)}, multiBlockPrefixScan<uint32_t>(), input_d, output1_d, psum_d, num_items));
+          alpaka::kernel::createTaskKernel<Acc>(WorkDiv{Vec::all(nblocks),Vec::all(nthreads),Vec::all(nelements)}, multiBlockPrefixScanFirstStep<uint32_t>(), input_d, output1_d, psum_d, num_items));
+    alpaka::wait::wait(queue);
+    alpaka::queue::enqueue(
+          queue,
+          alpaka::kernel::createTaskKernel<Acc>(WorkDiv{Vec::all(1),Vec::all(nthreads),Vec::all(nelements)}, multiBlockPrefixScanSecondStep<uint32_t>(), input_d, output1_d, psum_d, num_items, nblocks));
     alpaka::wait::wait(queue);
 
-
-    // cudaCheck(cudaGetLastError());
-    // // verify<<<nblocks, nthreads, 0>>>(output1_d, num_items);
     alpaka::queue::enqueue(
           queue,
           alpaka::kernel::createTaskKernel<Acc>(WorkDiv{Vec::all(nblocks),Vec::all(nthreads),Vec::all(nelements)}, verify(), output1_d, num_items));
