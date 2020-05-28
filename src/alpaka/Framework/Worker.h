@@ -17,6 +17,7 @@ namespace edm {
 
   class Worker {
   public:
+    Worker() : prefetchRequested_{false} {}
     virtual ~Worker() = default;
 
     // not thread safe
@@ -29,6 +30,9 @@ namespace edm {
     virtual void doWorkAsync(Event& event, EventSetup const& eventSetup, WaitingTask* iTask) = 0;
 
     // not thread safe
+    virtual void doEndJob() = 0;
+
+    // not thread safe
     void reset() {
       prefetchRequested_ = false;
       doReset();
@@ -39,13 +43,13 @@ namespace edm {
 
   private:
     std::vector<Worker*> itemsToGet_;
-    std::atomic<bool> prefetchRequested_ = false;
+    std::atomic<bool> prefetchRequested_;
   };
 
   template <typename T>
   class WorkerT : public Worker {
   public:
-    explicit WorkerT(ProductRegistry& reg) : producer_(reg) {}
+    explicit WorkerT(ProductRegistry& reg) : producer_(reg), workStarted_{false} {}
 
     void doWorkAsync(Event& event, EventSetup const& eventSetup, WaitingTask* iTask) override {
       waitingTasksWork_.add(iTask);
@@ -93,6 +97,8 @@ namespace edm {
       }
     }
 
+    void doEndJob() override { producer_.doEndJob(); }
+
   private:
     void doReset() override {
       waitingTasksWork_.reset();
@@ -101,7 +107,7 @@ namespace edm {
 
     T producer_;
     WaitingTaskList waitingTasksWork_;
-    std::atomic<bool> workStarted_ = false;
+    std::atomic<bool> workStarted_;
   };
 }  // namespace edm
 #endif

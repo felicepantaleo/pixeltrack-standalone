@@ -22,10 +22,8 @@
 #include "CondFormats/SiPixelFedCablingMapGPU.h"
 
 #include "gpuCalibPixel.h"
-#ifdef TODO
 #include "gpuClusterChargeCut.h"
 #include "gpuClustering.h"
-#endif
 
 // local includes
 #include "SiPixelRawToClusterGPUKernel.h"
@@ -539,7 +537,7 @@ namespace KOKKOS_NAMESPACE {
       if (includeErrors) {
         digiErrors_d = SiPixelDigiErrorsKokkos<KokkosExecSpace>(pixelgpudetails::MAX_FED_WORDS, std::move(errors));
       }
-      clusters_d = SiPixelClustersKokkos<KokkosExecSpace>(gpuClustering::MaxNumModules);
+      clusters_d = SiPixelClustersKokkos<KokkosExecSpace>(::gpuClustering::MaxNumModules);
 
 #ifdef TODO
       nModules_Clusters_h = cms::cuda::make_host_unique<uint32_t[]>(2, stream);
@@ -614,7 +612,7 @@ namespace KOKKOS_NAMESPACE {
           auto clusModuleStart_d = clusters_d.clusModuleStart();
 
           Kokkos::parallel_for(
-              Kokkos::RangePolicy<KokkosExecSpace>(0, std::max(int(wordCounter), int(gpuClustering::MaxNumModules))),
+              Kokkos::RangePolicy<KokkosExecSpace>(0, std::max(int(wordCounter), int(::gpuClustering::MaxNumModules))),
               KOKKOS_LAMBDA(const size_t i) {
                 gpuCalibPixel::calibDigis(moduleInd_d,
                                           xx_d,
@@ -628,10 +626,9 @@ namespace KOKKOS_NAMESPACE {
                                           i);
               });
         }
-        Kokkos::fence();
 
 #ifdef GPU_DEBUG
-        Kokkos::fence();
+        KokkosExecSpace().fence();
 #endif
 
 #ifdef GPU_DEBUG
@@ -639,11 +636,19 @@ namespace KOKKOS_NAMESPACE {
                   << " threads\n";
 #endif
 
+        using namespace gpuClustering;
+        {
+          auto moduleInd_d = digis_d.moduleInd();
+          auto moduleStart_d = clusters_d.moduleStart();
+          auto clusStart_d = digis_d.clus();
+          Kokkos::parallel_for(
+              Kokkos::RangePolicy<KokkosExecSpace>(0, std::max(int(wordCounter), int(::gpuClustering::MaxNumModules))),
+              KOKKOS_LAMBDA(const size_t i) {
+                gpuClustering::countModules(moduleInd_d, moduleStart_d, clusStart_d, wordCounter, i);
+              });
+        }
+        KokkosExecSpace().fence();
 #ifdef TODO
-        countModules<<<blocks, threadsPerBlock, 0, stream>>>(
-            digis_d.c_moduleInd(), clusters_d.moduleStart(), digis_d.clus(), wordCounter);
-        cudaCheck(cudaGetLastError());
-
         // read the number of modules into a data member, used by getProduct())
         cudaCheck(cudaMemcpyAsync(
             &(nModules_Clusters_h[0]), clusters_d.moduleStart(), sizeof(uint32_t), cudaMemcpyDefault, stream));
